@@ -1043,7 +1043,7 @@ struct ndp_msg_opt_type_info *ndp_msg_opt_type_info_by_raw_type(uint8_t raw_type
  *
  * Find next offset of option of given type. If offset is -1, start from
  * beginning, otherwise start from the given offset.
- * This funstion is internally used by ndp_msg_opt_for_each_offset() macro.
+ * This function is internally used by ndp_msg_opt_for_each_offset() macro.
  *
  * Returns: offset in opt payload of found opt of -1 in case it was not found.
  **/
