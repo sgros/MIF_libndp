@@ -1013,6 +1013,14 @@ static struct ndp_msg_opt_type_info ndp_msg_opt_type_info_list[] =
 		.raw_type = __ND_OPT_DNSSL,
 		.raw_struct_size = sizeof(struct __nd_opt_dnssl),
 	},
+	[NDP_MSG_OPT_PVDCO] = {
+		.raw_type = __ND_OPT_PVDCO,
+		.raw_struct_size = sizeof(struct __nd_opt_pvdco),
+	},
+	[NDP_MSG_OPT_PVDID] = {
+		.raw_type = __ND_OPT_PVDID,
+		.raw_struct_size = sizeof(struct __nd_opt_pvdid),
+	},
 };
 
 #define NDP_MSG_OPT_TYPE_LIST_SIZE ARRAY_SIZE(ndp_msg_opt_type_info_list)
@@ -1043,7 +1051,7 @@ struct ndp_msg_opt_type_info *ndp_msg_opt_type_info_by_raw_type(uint8_t raw_type
  *
  * Find next offset of option of given type. If offset is -1, start from
  * beginning, otherwise start from the given offset.
- * This funstion is internally used by ndp_msg_opt_for_each_offset() macro.
+ * This function is internally used by ndp_msg_opt_for_each_offset() macro.
  *
  * Returns: offset in opt payload of found opt of -1 in case it was not found.
  **/
@@ -1074,6 +1082,65 @@ int ndp_msg_next_opt_offset(struct ndp_msg *msg, int offset,
 			return ptr - opts_start;
 		ptr += cur_opt_len;
 		len -= cur_opt_len;
+		ignore = false;
+	}
+	return -1;
+}
+
+/**
+ * ndp_msg_next_subopt_offset:
+ * @msg: message structure
+ * @offset: container option offset
+ * @suboffset: suboption payload offset
+ * @subopt_type: suboption type
+ *
+ * Find next suboffset of suboption of a given type. If suboffset is -1, start from
+ * beginning of the container option, otherwise start from the given suboffset.
+ * This function is internally used by ndp_msg_subopt_for_each_suboffset() macro.
+ *
+ * Returns: suboffset in opt payload of found subopt or -1 in case it was not found.
+ **/
+NDP_EXPORT
+int ndp_msg_next_subopt_offset(struct ndp_msg *msg,
+			    int offset, enum ndp_msg_opt_type opt_type,
+			    int suboffset, enum ndp_msg_opt_type subopt_type)
+{
+	unsigned char *ptr = ndp_msg_payload_opts(msg) + offset;
+	size_t len = ndp_msg_payload_opts_len(msg);
+
+	size_t opt_raw_struct_size =
+			ndp_msg_opt_type_info(opt_type)->raw_struct_size;
+	unsigned char *subopts_start = ptr + opt_raw_struct_size;
+	unsigned char *subptr = subopts_start;
+	uint8_t subopt_raw_type = ndp_msg_opt_type_info(subopt_type)->raw_type;
+
+	/* How many bytes suboptions take. This is necessary to detect
+         * so we can detect overflow when parsing suboptions */
+	size_t sublen = ptr[1] << 3;
+
+	if (len < sublen)
+		return -1;
+
+	bool ignore = true;
+
+	if (suboffset == -1) {
+		suboffset = 0;
+		ignore = false;
+	} else
+		suboffset -= offset + opt_raw_struct_size;
+
+	subptr += suboffset;
+	sublen -= suboffset;
+	while (sublen > 0) {
+		uint8_t cur_subopt_raw_type = subptr[0];
+		unsigned int cur_subopt_len = subptr[1] << 3; /* convert to bytes */
+
+		if (!cur_subopt_len || sublen < cur_subopt_len)
+			break;
+		if (cur_subopt_raw_type == subopt_raw_type && !ignore)
+			return subptr - subopts_start + offset + opt_raw_struct_size;
+		subptr += cur_subopt_len;
+		sublen -= cur_subopt_len;
 		ignore = false;
 	}
 	return -1;
@@ -1116,6 +1183,63 @@ static bool ndp_msg_check_opts(struct ndp_msg *msg)
  * SECTION: msg_opt getters/setters
  * @short_description: Getters and setters for options
  */
+
+/**
+ * ndp_msg_opt_pvdid:
+ * @msg: message structure
+ * @offset: in-message offset
+ *
+ * Get PvD ID.
+ * User should use this function only inside ndp_msg_opt_for_each_offset()
+ * macro loop.
+ *
+ * Returns: pointer to PvD ID.
+ **/
+NDP_EXPORT
+unsigned char *ndp_msg_opt_pvdid(struct ndp_msg *msg, int offset)
+{
+	unsigned char *opt_data = ndp_msg_payload_opts_offset(msg, offset);
+
+	return &opt_data[4];
+}
+
+/**
+ * ndp_msg_opt_pvdid_type:
+ * @msg: message structure
+ * @offset: in-message offset
+ *
+ * Get PvD ID type.
+ * User should use this function only inside ndp_msg_opt_for_each_offset()
+ * macro loop.
+ *
+ * Returns: PvD ID type.
+ **/
+NDP_EXPORT
+enum ndp_pvdid_type ndp_msg_opt_pvdid_type(struct ndp_msg *msg, int offset)
+{
+	unsigned char *opt_data = ndp_msg_payload_opts_offset(msg, offset);
+
+	return opt_data[2];
+}
+
+/**
+ * ndp_msg_opt_pvdid_len:
+ * @msg: message structure
+ * @offset: in-message offset
+ *
+ * Get PvD ID length.
+ * User should use this function only inside ndp_msg_opt_for_each_offset()
+ * macro loop.
+ *
+ * Returns: PvD ID length in octets.
+ **/
+NDP_EXPORT
+size_t ndp_msg_opt_pvdid_len(struct ndp_msg *msg, int offset)
+{
+	unsigned char *opt_data = ndp_msg_payload_opts_offset(msg, offset);
+
+	return opt_data[3];
+}
 
 /**
  * ndp_msg_opt_slladdr:

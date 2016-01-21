@@ -181,11 +181,201 @@ static void pr_out_lft(uint32_t lifetime)
 		pr_out("%us", lifetime);
 }
 
+static void pr_out_pvdid(unsigned char *pvdid, size_t len)
+{
+	int i;
+
+	for (i = 0; i < len; i++) {
+		pr_out("%c", pvdid[i]);
+	}
+	pr_out("\n");
+}
+
+static void msgrcv_handler_func_parse_ra(struct ndp_msg *msg)
+{
+	int offset, suboffset;
+
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_SLLADDR) {
+		pr_out("  Source linkaddr: ");
+		pr_out_hwaddr(ndp_msg_opt_slladdr(msg, offset),
+			      ndp_msg_opt_slladdr_len(msg, offset));
+	}
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_TLLADDR) {
+		pr_out("  Target linkaddr: ");
+		pr_out_hwaddr(ndp_msg_opt_tlladdr(msg, offset),
+			      ndp_msg_opt_tlladdr_len(msg, offset));
+	}
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_PREFIX) {
+		uint32_t valid_time;
+		uint32_t preferred_time;
+
+		valid_time = ndp_msg_opt_prefix_valid_time(msg, offset);
+		preferred_time = ndp_msg_opt_prefix_preferred_time(msg, offset);
+		pr_out("  Prefix: %s/%u",
+		       str_in6_addr(ndp_msg_opt_prefix(msg, offset)),
+		       ndp_msg_opt_prefix_len(msg, offset));
+		pr_out(", valid_time: ");
+		if (valid_time == (uint32_t) -1)
+			pr_out("infinity");
+		else
+			pr_out("%us", valid_time);
+		pr_out(", preferred_time: ");
+		if (preferred_time == (uint32_t) -1)
+			pr_out("infinity");
+		else
+			pr_out("%us", preferred_time);
+		pr_out(", on_link: %s",
+		       ndp_msg_opt_prefix_flag_on_link(msg, offset) ? "yes" : "no");
+		pr_out(", autonomous_addr_conf: %s",
+		       ndp_msg_opt_prefix_flag_auto_addr_conf(msg, offset) ? "yes" : "no");
+		pr_out(", router_addr: %s",
+		       ndp_msg_opt_prefix_flag_router_addr(msg, offset) ? "yes" : "no");
+		pr_out("\n");
+	}
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_MTU)
+		pr_out("  MTU: %u\n", ndp_msg_opt_mtu(msg, offset));
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_ROUTE) {
+		pr_out("  Route: %s/%u",
+		       str_in6_addr(ndp_msg_opt_route_prefix(msg, offset)),
+		       ndp_msg_opt_route_prefix_len(msg, offset));
+		pr_out(", lifetime: ");
+		pr_out_lft(ndp_msg_opt_route_lifetime(msg, offset));
+		pr_out(", preference: ");
+		pr_out_route_preference(ndp_msg_opt_route_preference(msg, offset));
+		pr_out("\n");
+	}
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_RDNSS) {
+		static struct in6_addr *addr;
+		int addr_index;
+
+		pr_out("  Recursive DNS Servers: ");
+		ndp_msg_opt_rdnss_for_each_addr(addr, addr_index, msg, offset) {
+			if (addr_index != 0)
+				pr_out(", ");
+			pr_out("%s", str_in6_addr(addr));
+		}
+		pr_out(", lifetime: ");
+		pr_out_lft(ndp_msg_opt_rdnss_lifetime(msg, offset));
+		pr_out("\n");
+	}
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_DNSSL) {
+		char *domain;
+		int domain_index;
+
+		pr_out("  DNS Search List: ");
+		ndp_msg_opt_dnssl_for_each_domain(domain, domain_index, msg, offset) {
+			if (domain_index != 0)
+				pr_out(" ");
+			pr_out("%s", domain);
+		}
+		pr_out(", lifetime: ");
+		pr_out_lft(ndp_msg_opt_rdnss_lifetime(msg, offset));
+		pr_out("\n");
+	}
+
+	ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_PVDCO) {
+
+		pr_out("  PvD Container\n");
+
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_PVDID, offset, NDP_MSG_OPT_PVDCO) {
+			pr_out("     PvD ID: ");
+			pr_out_pvdid(ndp_msg_opt_pvdid(msg, suboffset),
+				      ndp_msg_opt_pvdid_len(msg, suboffset));
+		}
+
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_SLLADDR, offset, NDP_MSG_OPT_PVDCO) {
+			pr_out("     Source linkaddr: ");
+			pr_out_hwaddr(ndp_msg_opt_slladdr(msg, suboffset),
+				      ndp_msg_opt_slladdr_len(msg, suboffset));
+		}
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_TLLADDR, offset, NDP_MSG_OPT_PVDCO) {
+			pr_out("     Target linkaddr: ");
+			pr_out_hwaddr(ndp_msg_opt_tlladdr(msg, suboffset),
+				      ndp_msg_opt_tlladdr_len(msg, suboffset));
+		}
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_PREFIX, offset, NDP_MSG_OPT_PVDCO) {
+			uint32_t valid_time;
+			uint32_t preferred_time;
+
+			valid_time = ndp_msg_opt_prefix_valid_time(msg, suboffset);
+			preferred_time = ndp_msg_opt_prefix_preferred_time(msg, suboffset);
+			pr_out("     Prefix: %s/%u",
+			       str_in6_addr(ndp_msg_opt_prefix(msg, suboffset)),
+			       ndp_msg_opt_prefix_len(msg, suboffset));
+			pr_out(", valid_time: ");
+			if (valid_time == (uint32_t) -1)
+				pr_out("infinity");
+			else
+				pr_out("%us", valid_time);
+			pr_out(", preferred_time: ");
+			if (preferred_time == (uint32_t) -1)
+				pr_out("infinity");
+			else
+				pr_out("%us", preferred_time);
+			pr_out(", on_link: %s",
+			       ndp_msg_opt_prefix_flag_on_link(msg, suboffset) ? "yes" : "no");
+			pr_out(", autonomous_addr_conf: %s",
+			       ndp_msg_opt_prefix_flag_auto_addr_conf(msg, suboffset) ? "yes" : "no");
+			pr_out(", router_addr: %s",
+			       ndp_msg_opt_prefix_flag_router_addr(msg, suboffset) ? "yes" : "no");
+			pr_out("\n");
+		}
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_MTU, offset, NDP_MSG_OPT_PVDCO)
+			pr_out("     MTU: %u\n", ndp_msg_opt_mtu(msg, suboffset));
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_ROUTE, offset, NDP_MSG_OPT_PVDCO) {
+			pr_out("     Route: %s/%u",
+			       str_in6_addr(ndp_msg_opt_route_prefix(msg, suboffset)),
+			       ndp_msg_opt_route_prefix_len(msg, suboffset));
+			pr_out(", lifetime: ");
+			pr_out_lft(ndp_msg_opt_route_lifetime(msg, suboffset));
+			pr_out(", preference: ");
+			pr_out_route_preference(ndp_msg_opt_route_preference(msg, suboffset));
+			pr_out("\n");
+		}
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_RDNSS, offset, NDP_MSG_OPT_PVDCO) {
+			static struct in6_addr *addr;
+			int addr_index;
+
+			pr_out("     Recursive DNS Servers: ");
+			ndp_msg_opt_rdnss_for_each_addr(addr, addr_index, msg, suboffset) {
+				if (addr_index != 0)
+					pr_out(", ");
+				pr_out("%s", str_in6_addr(addr));
+			}
+			pr_out(", lifetime: ");
+			pr_out_lft(ndp_msg_opt_rdnss_lifetime(msg, suboffset));
+			pr_out("\n");
+		}
+		ndp_msg_subopt_for_each_suboffset(suboffset, msg,
+				NDP_MSG_OPT_DNSSL, offset, NDP_MSG_OPT_PVDCO) {
+			char *domain;
+			int domain_index;
+
+			pr_out("     DNS Search List: ");
+			ndp_msg_opt_dnssl_for_each_domain(domain, domain_index, msg, suboffset) {
+				if (domain_index != 0)
+					pr_out(" ");
+				pr_out("%s", domain);
+			}
+			pr_out(", lifetime: ");
+			pr_out_lft(ndp_msg_opt_rdnss_lifetime(msg, suboffset));
+			pr_out("\n");
+		}
+
+	}
+}
+
 static int msgrcv_handler_func(struct ndp *ndp, struct ndp_msg *msg, void *priv)
 {
 	char ifname[IF_NAMESIZE];
 	enum ndp_msg_type msg_type = ndp_msg_type(msg);
-	int offset;
 
 	if_indextoname(ndp_msg_ifindex(msg), ifname);
 	pr_out("NDP payload len %zu, from addr: %s, iface: %s\n",
@@ -194,6 +384,7 @@ static int msgrcv_handler_func(struct ndp *ndp, struct ndp_msg *msg, void *priv)
 	if (msg_type == NDP_MSG_RS) {
 		pr_out("  Type: RS\n");
 	} else if (msg_type == NDP_MSG_RA) {
+
 		struct ndp_msgra *msgra = ndp_msgra(msg);
 
 		pr_out("  Type: RA\n");
@@ -222,83 +413,8 @@ static int msgrcv_handler_func(struct ndp *ndp, struct ndp_msg *msg, void *priv)
 			pr_out("unspecified\n");
 		}
 
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_SLLADDR) {
-			pr_out("  Source linkaddr: ");
-			pr_out_hwaddr(ndp_msg_opt_slladdr(msg, offset),
-				      ndp_msg_opt_slladdr_len(msg, offset));
-		}
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_TLLADDR) {
-			pr_out("  Target linkaddr: ");
-			pr_out_hwaddr(ndp_msg_opt_tlladdr(msg, offset),
-				      ndp_msg_opt_tlladdr_len(msg, offset));
-		}
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_PREFIX) {
-			uint32_t valid_time;
-			uint32_t preferred_time;
+		msgrcv_handler_func_parse_ra(msg);
 
-			valid_time = ndp_msg_opt_prefix_valid_time(msg, offset);
-			preferred_time = ndp_msg_opt_prefix_preferred_time(msg, offset);
-			pr_out("  Prefix: %s/%u",
-			       str_in6_addr(ndp_msg_opt_prefix(msg, offset)),
-			       ndp_msg_opt_prefix_len(msg, offset));
-			pr_out(", valid_time: ");
-			if (valid_time == (uint32_t) -1)
-				pr_out("infinity");
-			else
-				pr_out("%us", valid_time);
-			pr_out(", preferred_time: ");
-			if (preferred_time == (uint32_t) -1)
-				pr_out("infinity");
-			else
-				pr_out("%us", preferred_time);
-			pr_out(", on_link: %s",
-			       ndp_msg_opt_prefix_flag_on_link(msg, offset) ? "yes" : "no");
-			pr_out(", autonomous_addr_conf: %s",
-			       ndp_msg_opt_prefix_flag_auto_addr_conf(msg, offset) ? "yes" : "no");
-			pr_out(", router_addr: %s",
-			       ndp_msg_opt_prefix_flag_router_addr(msg, offset) ? "yes" : "no");
-			pr_out("\n");
-		}
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_MTU)
-			pr_out("  MTU: %u\n", ndp_msg_opt_mtu(msg, offset));
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_ROUTE) {
-			pr_out("  Route: %s/%u",
-			       str_in6_addr(ndp_msg_opt_route_prefix(msg, offset)),
-			       ndp_msg_opt_route_prefix_len(msg, offset));
-			pr_out(", lifetime: ");
-			pr_out_lft(ndp_msg_opt_route_lifetime(msg, offset));
-			pr_out(", preference: ");
-			pr_out_route_preference(ndp_msg_opt_route_preference(msg, offset));
-			pr_out("\n");
-		}
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_RDNSS) {
-			static struct in6_addr *addr;
-			int addr_index;
-
-			pr_out("  Recursive DNS Servers: ");
-			ndp_msg_opt_rdnss_for_each_addr(addr, addr_index, msg, offset) {
-				if (addr_index != 0)
-					pr_out(", ");
-				pr_out("%s", str_in6_addr(addr));
-			}
-			pr_out(", lifetime: ");
-			pr_out_lft(ndp_msg_opt_rdnss_lifetime(msg, offset));
-			pr_out("\n");
-		}
-		ndp_msg_opt_for_each_offset(offset, msg, NDP_MSG_OPT_DNSSL) {
-			char *domain;
-			int domain_index;
-
-			pr_out("  DNS Search List: ");
-			ndp_msg_opt_dnssl_for_each_domain(domain, domain_index, msg, offset) {
-				if (domain_index != 0)
-					pr_out(" ");
-				pr_out("%s", domain);
-			}
-			pr_out(", lifetime: ");
-			pr_out_lft(ndp_msg_opt_rdnss_lifetime(msg, offset));
-			pr_out("\n");
-		}
 	} else if (msg_type == NDP_MSG_NS) {
 		pr_out("  Type: NS\n");
 	} else if (msg_type == NDP_MSG_NA) {

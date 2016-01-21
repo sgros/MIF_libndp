@@ -85,6 +85,8 @@ ndp_log_null(struct ndp *ndp, const char *format, ...) {}
 #define __ND_OPT_ROUTE_INFO 24 /* rfc4191 */
 #define __ND_OPT_RDNSS 25 /* rfc6106 */
 #define __ND_OPT_DNSSL 31 /* rfc6106 */
+#define __ND_OPT_PVDCO 63 /* draft PvD */
+#define __ND_OPT_PVDID 64 /* draft PvD */
 
 struct __nd_opt_route_info { /* route information */
 	uint8_t		nd_opt_ri_type;
@@ -109,6 +111,23 @@ struct __nd_opt_dnssl { /* DNS Search List */
 	uint16_t	nd_opt_dnssl_reserved;
 	uint32_t	nd_opt_dnssl_lifetime;
 	char		nd_opt_dnssl_domains[0];
+};
+
+struct __nd_opt_pvdco { /* PvD Container Option */
+	uint8_t		nd_opt_pvdco_type;
+	uint8_t		nd_opt_pvdco_len;
+	uint8_t		nd_opt_pvdco_s:1, :7;
+	uint8_t		nd_opt_pvdco_nametype;
+	uint32_t	nd_opt_pvdco_padding;
+	char		nd_opt_pvdco_options[0];
+};
+
+struct __nd_opt_pvdid { /* PvD ID Option */
+	uint8_t		nd_opt_pvdid_type;
+	uint8_t		nd_opt_pvdid_len;
+	uint8_t		nd_opt_pvdid_idtype;
+	uint8_t		nd_opt_pvdid_idlen;
+	char		nd_opt_pvdid_id[36];
 };
 
 

@@ -59,6 +59,10 @@ enum ndp_route_preference {
 	NDP_ROUTE_PREF_HIGH = 1,
 };
 
+enum ndp_pvdid_type {
+	NDP_PVDID_TYPE_UUID = 4,
+};
+
 int ndp_msg_new(struct ndp_msg **p_msg, enum ndp_msg_type msg_type);
 void ndp_msg_destroy(struct ndp_msg *msg);
 void *ndp_msg_payload(struct ndp_msg *msg);
@@ -109,6 +113,8 @@ enum ndp_msg_opt_type {
 	NDP_MSG_OPT_ROUTE, /* Route Information */
 	NDP_MSG_OPT_RDNSS, /* Recursive DNS Server */
 	NDP_MSG_OPT_DNSSL, /* DNS Search List */
+	NDP_MSG_OPT_PVDCO, /* PvD Container Option */
+	NDP_MSG_OPT_PVDID, /* PVD ID Option */
 };
 
 int ndp_msg_next_opt_offset(struct ndp_msg *msg, int offset,
@@ -119,6 +125,18 @@ int ndp_msg_next_opt_offset(struct ndp_msg *msg, int offset,
 	     offset != -1;						\
 	     offset = ndp_msg_next_opt_offset(msg, offset, type))
 
+int ndp_msg_next_subopt_offset(struct ndp_msg *msg,
+		int offset, enum ndp_msg_opt_type opt_type,
+		int suboffset, enum ndp_msg_opt_type subopt_type);
+
+#define ndp_msg_subopt_for_each_suboffset(suboffset, msg, subtype, offset, type)	\
+	for (suboffset = ndp_msg_next_subopt_offset(msg, offset, type, -1, subtype);	\
+	     suboffset != -1;								\
+	     suboffset = ndp_msg_next_subopt_offset(msg, offset, type, suboffset, subtype))
+
+unsigned char *ndp_msg_opt_pvdid(struct ndp_msg *msg, int offset);
+enum ndp_pvdid_type ndp_msg_opt_pvdid_type(struct ndp_msg *msg, int offset);
+size_t ndp_msg_opt_pvdid_len(struct ndp_msg *msg, int offset);
 unsigned char *ndp_msg_opt_slladdr(struct ndp_msg *msg, int offset);
 size_t ndp_msg_opt_slladdr_len(struct ndp_msg *msg, int offset);
 unsigned char *ndp_msg_opt_tlladdr(struct ndp_msg *msg, int offset);
